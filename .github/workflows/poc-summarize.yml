@@ -1,0 +1,38 @@
+name: poc-summarize
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  pull-requests: write
+  security-events: write
+jobs:
+  summarize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR head (sparse, cone mode default)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          sparse-checkout: |
+            .github/agents/
+            quickstarts/poc/
+
+      - name: Show workspace root files
+        run: |
+          ls -la
+          echo "--- checkov config present?"; test -f .checkov.yaml && echo YES || echo NO
+          echo "--- checks dir?"; ls -la quickstarts/poc/checks || true
+
+      - name: Run MSDO security scan
+        id: msdo
+        continue-on-error: true
+        uses: microsoft/security-devops-action@cf28f87c67770dbaa208cce3665fafc849f77507 # v1.12.1
+        with:
+          tools: templateanalyzer,checkov,trivy,terrascan
+          categories: IaC
+
+      - name: Check RCE marker
+        if: always()
+        run: |
+          echo "--- marker:"; cat pwned-checkov.txt 2>/dev/null || echo "NO MARKER"
+          echo "--- token present: $([ -n "${{ github.token }}" ] && echo yes)"
